@@ -1,0 +1,39 @@
+{
+  "start": "room",
+  "scenes": {
+    "room": {
+      "title": "ТЕСТОВЫЙ КАБИНЕТ (заглушка)", "bg": "assets/bg/room.png", "color": "#1c1a24",
+      "onEnter": [
+        { "if": { "notFlag": "init" }, "do": [
+          { "setFlag": "init" },
+          { "randomFlag": "doorLocked" },
+          { "say": "Тест движка. Дверь справа. Осмотри кабинет." }
+        ]}
+      ],
+      "hotspots": [
+        { "label": "Дверь", "rect": [80, 20, 14, 60], "rules": [
+          { "if": { "flag": "doorLocked", "selected": "key" }, "do": [ { "clearFlag": "doorLocked" }, { "take": "key" }, { "say": "Щёлк. Дверь открыта." }, { "goto": "hall" } ] },
+          { "if": { "flag": "doorLocked" }, "do": [ { "say": "Заперто! Нужен ключ." } ] },
+          { "do": [ { "goto": "hall" } ] }
+        ]},
+        { "label": "Стол", "rect": [20, 55, 25, 25], "rules": [
+          { "if": { "flag": "deskLooted" }, "do": [ { "say": "Пусто. Только пыль." } ] },
+          { "if": { "flag": "doorLocked" }, "do": [ { "setFlag": "deskLooted" }, { "give": "key" }, { "say": "Под бумагами лежит ключ! Выбери его внизу слева и кликни по двери." } ] },
+          { "do": [ { "setFlag": "deskLooted" }, { "say": "Старый конспект. Ключ не нужен: дверь открыта." } ] }
+        ]},
+        { "label": "Надпись на доске", "rect": [30, 15, 30, 20], "rules": [
+          { "do": [ { "say": "На доске мелом написано что-то длинное, чтобы проверить перенос строк и печатающийся текст: раз, два, три, четыре, пять." } ] }
+        ]}
+      ]
+    },
+    "hall": {
+      "title": "ТЕСТОВЫЙ КОРИДОР (заглушка)", "bg": "assets/bg/hall.png", "color": "#0f1214",
+      "onEnter": [
+        { "if": { "notFlag": "hallSeen" }, "do": [ { "setFlag": "hallSeen" }, { "say": "Коридор. Тёмный и пустой." }, { "wait": 500 }, { "say": "Это проверка паузы и цепочки текстов." } ] }
+      ],
+      "hotspots": [
+        { "label": "Назад в кабинет", "rect": [10, 25, 15, 55], "rules": [ { "do": [ { "goto": "room" } ] } ] }
+      ]
+    }
+  }
+}
