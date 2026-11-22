@@ -60,3 +60,12 @@ def draw_tooltip(surf, text, pos):
     r.clamp_ip(surf.get_rect())
     pygame.draw.rect(surf, (0, 0, 0), r)
     surf.blit(img, img.get_rect(center=r.center))
+
+
+def draw_button(surf, rect, text, enabled=True, hover=False):
+    """Кнопка для меню."""
+    border = COLOR_ACCENT if (hover and enabled) else (70, 70, 70)
+    pygame.draw.rect(surf, (26, 26, 30), rect)
+    pygame.draw.rect(surf, border, rect, 2)
+    img = assets.font(28).render(text, True, COLOR_TEXT if enabled else (90, 90, 90))
+    surf.blit(img, img.get_rect(center=rect.center))
