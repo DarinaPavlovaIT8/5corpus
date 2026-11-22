@@ -1,3 +1,14 @@
 {
-  "key": { "name": "Ключ от кабинета", "icon": "assets/items/key.png" }
+ "key": {
+  "name": "Ключ от аудитории",
+  "icon": "assets/items/key.png"
+ },
+ "shield_key": {
+  "name": "Ключ от щитка",
+  "icon": "assets/items/shield_key.png"
+ },
+ "brelok777": {
+  "name": "Брелок 777",
+  "icon": "assets/items/brelok777.png"
+ }
 }

@@ -5,11 +5,12 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-# в движок добавляется новое действие, его сюда
-KNOWN_ACTIONS = {"say", "wait", "give", "take", "setFlag", "clearFlag", "randomFlag", "goto"}
+# Когда в движок добавляется новое действие, допиши его сюда
+KNOWN_ACTIONS = {"say", "wait", "give", "take", "setFlag", "clearFlag", "randomFlag", "goto", "ending"}
 COND_KEYS = {"flag", "notFlag", "has", "selected"}
 
 errors, warnings = [], []
+endings = {}
 set_flags, used_flags = set(), set()
 
 
@@ -33,6 +34,8 @@ def check_actions(actions, where, scenes, items):
         key, val = next(iter(a.items()))
         if key not in KNOWN_ACTIONS:
             err(f"{where}[{i}]: неизвестное действие '{key}'")
+        elif key == "ending" and val not in endings:
+            err(f"{where}[{i}]: концовки '{val}' нет в блоке endings")
         elif key == "goto" and val not in scenes:
             err(f"{where}[{i}]: goto на несуществующую сцену '{val}'")
         elif key in ("give", "take") and val not in items:
@@ -47,6 +50,10 @@ def main():
     data = json.loads((ROOT / "data" / "scenes.json").read_text(encoding="utf-8"))
     items = json.loads((ROOT / "data" / "items.json").read_text(encoding="utf-8"))
     scenes = data.get("scenes", {})
+    endings.update(data.get("endings", {}))
+    for eid, e in endings.items():
+        if not e.get("title") or not e.get("text"):
+            err(f"концовка '{eid}': нужны поля title и text")
     if data.get("start") not in scenes:
         err(f"start='{data.get('start')}' — такой сцены нет")
     for sid, sc in scenes.items():
