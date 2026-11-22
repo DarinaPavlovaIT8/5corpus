@@ -1,6 +1,6 @@
 """Выполнение действий из JSON по очереди.
-Мгновенные: give, take, setFlag, clearFlag, randomFlag, goto.
-Блокирующие (ждём игрока/время): say, wait"""
+Мгновенные: give, take, setFlag, clearFlag, randomFlag, goto, ending.
+Блокирующие (ждём игрока/время): say, wait."""
 import random
 from collections import deque
 
@@ -10,7 +10,7 @@ from . import ui
 class Task:
     """Блокирующее действие: пока оно идёт, игрок не может кликать по сцене."""
     def update(self, dt):
-        return True  #закончено
+        return True  # True = закончено
 
     def draw(self, surf):
         pass
@@ -20,7 +20,7 @@ class Task:
 
 
 class SayTask(Task):
-    SPEED = 45  #в секунду
+    SPEED = 45  # символов в секунду
 
     def __init__(self, text):
         self.text, self.t, self.done = text, 0.0, False
@@ -30,7 +30,7 @@ class SayTask(Task):
         return self.done
 
     def on_click(self, pos=None):
-        if self.t * self.SPEED < len(self.text):  #первый клик  показать весь текст
+        if self.t * self.SPEED < len(self.text):  # первый клик — показать весь текст
             self.t = len(self.text) / self.SPEED
         else:
             self.done = True
@@ -79,6 +79,7 @@ class ActionRunner:
             self.task = self._exec(self.queue.popleft())
 
     def _exec(self, a):
+        """Выполняет одно действие. Возвращает Task, если нужно подождать, иначе None."""
         g, st = self.game, self.game.state
         key, val = next(iter(a.items()))
         if key == "say":
@@ -100,6 +101,9 @@ class ActionRunner:
             (st.flags.add if random.random() < 0.5 else st.flags.discard)(val)
         elif key == "goto":
             g.change_scene(val)
+        elif key == "ending":  # конец игры: остальные действия отменяются
+            self.clear()
+            g.show_ending(val)
         else:
             print(f"[!] Неизвестное действие: {key}")
         return None
