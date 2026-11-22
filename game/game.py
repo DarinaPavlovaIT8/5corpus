@@ -1,13 +1,14 @@
-"""Главный класс: окно, игровой цикл, клики"""
+"""Главный класс: окно, режимы (меню / игра / концовка), клики, сохранение."""
 import json
 import sys
 
 import pygame
 
-from . import ui
+from . import assets, ui
 from .actions import ActionRunner
 from .scene import Scene
-from .settings import WIDTH, HEIGHT, FPS, TITLE, SCENES_PATH, ITEMS_PATH
+from .settings import (WIDTH, HEIGHT, FPS, TITLE, SCENES_PATH, ITEMS_PATH,
+                       COLOR_TEXT, COLOR_ACCENT)
 from .state import GameState
 
 
@@ -24,23 +25,63 @@ class Game:
 
         self.state = GameState()
         self.runner = ActionRunner(self)
+        self.mode = "menu"  # menu | play | ending
+        self.ending = None
         self.debug = False
         self.fade = 0.0
-        self.change_scene(self.data["start"])  # меню появится в следующих блоках
+        self.was_busy = False
+        cx = WIDTH // 2 - 150
+        self.menu_buttons = {
+            "new": pygame.Rect(cx, 330, 300, 56),
+            "continue": pygame.Rect(cx, 400, 300, 56),
+            "quit": pygame.Rect(cx, 470, 300, 56),
+        }
 
-    # ---------- сцены ----------
-    def change_scene(self, sid):
+    # ---------- сохранение ----------
+    def can_continue(self):
+        """Есть ли рабочее сохранение (битое или со старой сценой считается отсутствующим)."""
+        return GameState().load(valid_scenes=self.scenes)
+
+    # ---------- управление игрой ----------
+    def new_game(self):
+        self.state.reset()
+        self.runner.clear()
+        self.mode = "play"
+        self.change_scene(self.data["start"])
+
+    def continue_game(self):
+        if not self.state.load(valid_scenes=self.scenes):
+            return
+        self.runner.clear()
+        self.mode = "play"
+        self.change_scene(self.state.scene, run_enter=False)
+
+    def to_menu(self):
+        if self.mode == "play":
+            self.state.save()
+        self.runner.clear()
+        self.mode = "menu"
+
+    def change_scene(self, sid, run_enter=True):
         if sid not in self.scenes:
             print(f"[!] Нет сцены: {sid}")
             return
         self.state.scene = sid
         self.state.selected = None
         self.fade = 1.0  # плавное появление
-        actions = []
-        for rule in self.scenes[sid].on_enter:
-            if self.state.check(rule.get("if")):
-                actions += rule["do"]
-        self.runner.push_front(actions)
+        if run_enter:
+            actions = []
+            for rule in self.scenes[sid].on_enter:
+                if self.state.check(rule.get("if")):
+                    actions += rule["do"]
+            self.runner.push_front(actions)
+        if self.mode == "play":
+            self.state.save()
+
+    def show_ending(self, eid):
+        self.ending = self.data["endings"][eid]
+        self.mode = "ending"
+        GameState.delete_save()  # игра пройдена, «Продолжить» больше не нужно
 
     @property
     def scene(self):
@@ -48,17 +89,31 @@ class Game:
 
     # ---------- события ----------
     def handle(self, e):
-        if e.type == pygame.QUIT or (e.type == pygame.KEYDOWN and e.key == pygame.K_ESCAPE):
+        if e.type == pygame.QUIT:
             self.quit()
         elif e.type == pygame.KEYDOWN:
             if e.key == pygame.K_F3:
                 self.debug = not self.debug
-            elif e.key in (pygame.K_SPACE, pygame.K_RETURN) and self.runner.task:
+            elif e.key == pygame.K_ESCAPE and self.mode == "play":
+                self.to_menu()
+            elif e.key in (pygame.K_SPACE, pygame.K_RETURN) and self.mode == "play" and self.runner.task:
                 self.runner.task.on_click(None)
         elif e.type == pygame.MOUSEBUTTONDOWN and e.button == 1:
-            self.click(e.pos)
+            {"menu": self.click_menu, "play": self.click_play, "ending": self.click_ending}[self.mode](e.pos)
 
-    def click(self, pos):
+    def click_menu(self, pos):
+        b = self.menu_buttons
+        if b["new"].collidepoint(pos):
+            self.new_game()
+        elif b["continue"].collidepoint(pos) and self.can_continue():
+            self.continue_game()
+        elif b["quit"].collidepoint(pos):
+            self.quit()
+
+    def click_ending(self, pos):
+        self.mode = "menu"
+
+    def click_play(self, pos):
         if self.runner.task:  # идёт текст/пауза
             self.runner.task.on_click(pos)
             return
@@ -79,11 +134,24 @@ class Game:
 
     # ---------- цикл ----------
     def update(self, dt):
+        if self.mode != "play":
+            return
         self.runner.update(dt)
         if self.fade > 0:
             self.fade = max(0.0, self.fade - dt * 2.5)
+        if self.mode == "play" and self.was_busy and not self.runner.busy:
+            self.state.save()  # автосохранение после каждого действия
+        self.was_busy = self.runner.busy
 
     def draw(self):
+        if self.mode == "menu":
+            self.draw_menu()
+        elif self.mode == "ending":
+            self.draw_ending()
+        else:
+            self.draw_play()
+
+    def draw_play(self):
         s = self.screen
         self.scene.draw(s, self.state, self.debug)
         ui.draw_inventory(s, self.state, self.items)
@@ -99,6 +167,33 @@ class Game:
             veil = pygame.Surface((WIDTH, HEIGHT))
             veil.set_alpha(int(255 * self.fade))
             s.blit(veil, (0, 0))
+
+    def draw_menu(self):
+        s = self.screen
+        s.fill((8, 8, 10))
+        title = assets.font(64).render("ПЯТЫЙ КОРПУС", True, COLOR_TEXT)
+        s.blit(title, title.get_rect(center=(WIDTH // 2, 220)))
+        pos = pygame.mouse.get_pos()
+        enabled = {"new": True, "continue": self.can_continue(), "quit": True}
+        labels = {"new": "Новая игра", "continue": "Продолжить", "quit": "Выход"}
+        for key, r in self.menu_buttons.items():
+            ui.draw_button(s, r, labels[key], enabled[key], r.collidepoint(pos))
+        pygame.mouse.set_cursor(pygame.SYSTEM_CURSOR_ARROW)
+        hint = assets.font(18).render("Esc в игре: в меню · F3: показать зоны клика", True, (90, 90, 90))
+        s.blit(hint, hint.get_rect(center=(WIDTH // 2, HEIGHT - 40)))
+
+    def draw_ending(self):
+        s = self.screen
+        s.fill((0, 0, 0))
+        t = assets.font(60).render(self.ending["title"], True, COLOR_ACCENT)
+        s.blit(t, t.get_rect(center=(WIDTH // 2, 260)))
+        f = assets.font(28)
+        for i, line in enumerate(ui.wrap(self.ending["text"], f, 800)):
+            img = f.render(line, True, COLOR_TEXT)
+            s.blit(img, img.get_rect(center=(WIDTH // 2, 340 + i * 38)))
+        hint = assets.font(18).render("Клик: в главное меню", True, (90, 90, 90))
+        s.blit(hint, hint.get_rect(center=(WIDTH // 2, HEIGHT - 60)))
+        pygame.mouse.set_cursor(pygame.SYSTEM_CURSOR_ARROW)
 
     def quit(self):
         pygame.quit()
