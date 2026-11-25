@@ -1,4 +1,4 @@
-"""Главный класс: окно, режимы (меню / игра / концовка), клики, сохранение."""
+"""Главный класс: окно, режимы (меню / игра / концовка), навигация стрелками, инвентарь, скрещивание."""
 import json
 import sys
 
@@ -7,9 +7,9 @@ import pygame
 from . import assets, ui
 from .actions import ActionRunner
 from .scene import Scene
-from .settings import (WIDTH, HEIGHT, FPS, TITLE, SCENES_PATH, ITEMS_PATH,
-                       COLOR_TEXT, COLOR_ACCENT)
-from .state import GameState
+from .settings import (WIDTH, HEIGHT, VIEW_W, VIEW_H, FPS, TITLE, SCENES_PATH, ITEMS_PATH,
+                       RECIPES_PATH, COLOR_TEXT, COLOR_ACCENT)
+from .state import GameState, find_recipe
 
 
 class Game:
@@ -21,6 +21,7 @@ class Game:
 
         self.data = json.loads(SCENES_PATH.read_text(encoding="utf-8"))
         self.items = json.loads(ITEMS_PATH.read_text(encoding="utf-8"))
+        self.recipes = json.loads(RECIPES_PATH.read_text(encoding="utf-8"))
         self.scenes = {sid: Scene(sid, d) for sid, d in self.data["scenes"].items()}
 
         self.state = GameState()
@@ -30,12 +31,18 @@ class Game:
         self.debug = False
         self.fade = 0.0
         self.was_busy = False
+        self.inv_scroll = 0
+        self.label, self.label_t = "", 0.0
         cx = WIDTH // 2 - 150
         self.menu_buttons = {
             "new": pygame.Rect(cx, 330, 300, 56),
             "continue": pygame.Rect(cx, 400, 300, 56),
             "quit": pygame.Rect(cx, 470, 300, 56),
         }
+
+    # ---------- подпись сверху ----------
+    def show_label(self, text, seconds=2.2):
+        self.label, self.label_t = text, seconds
 
     # ---------- сохранение ----------
     def can_continue(self):
@@ -46,6 +53,7 @@ class Game:
     def new_game(self):
         self.state.reset()
         self.runner.clear()
+        self.inv_scroll, self.label_t = 0, 0.0
         self.mode = "play"
         self.change_scene(self.data["start"])
 
@@ -53,6 +61,7 @@ class Game:
         if not self.state.load(valid_scenes=self.scenes):
             return
         self.runner.clear()
+        self.inv_scroll, self.label_t = 0, 0.0
         self.mode = "play"
         self.change_scene(self.state.scene, run_enter=False)
 
@@ -66,8 +75,7 @@ class Game:
         if sid not in self.scenes:
             print(f"[!] Нет сцены: {sid}")
             return
-        self.state.scene = sid
-        self.state.selected = None
+        self.state.scene = sid  # выбранный предмет сохраняется при переходах, как в Rusty Lake
         self.fade = 1.0  # плавное появление
         if run_enter:
             actions = []
@@ -98,8 +106,14 @@ class Game:
                 self.to_menu()
             elif e.key in (pygame.K_SPACE, pygame.K_RETURN) and self.mode == "play" and self.runner.task:
                 self.runner.task.on_click(None)
-        elif e.type == pygame.MOUSEBUTTONDOWN and e.button == 1:
-            {"menu": self.click_menu, "play": self.click_play, "ending": self.click_ending}[self.mode](e.pos)
+        elif e.type == pygame.MOUSEWHEEL and self.mode == "play":
+            if pygame.mouse.get_pos()[0] >= VIEW_W:  # крутим только над панелью инвентаря
+                self.inv_scroll -= e.y
+        elif e.type == pygame.MOUSEBUTTONDOWN and e.button in (1, 3):
+            if self.mode == "play":
+                self.click_play(e.pos, e.button)
+            elif e.button == 1:
+                {"menu": self.click_menu, "ending": self.click_ending}[self.mode](e.pos)
 
     def click_menu(self, pos):
         b = self.menu_buttons
@@ -113,17 +127,23 @@ class Game:
     def click_ending(self, pos):
         self.mode = "menu"
 
-    def click_play(self, pos):
-        if self.runner.task:  # идёт текст/пауза
-            self.runner.task.on_click(pos)
+    def click_play(self, pos, button=1):
+        if self.runner.task:  # идёт текст / пауза / головоломка
+            if button == 1:
+                self.runner.task.on_click(pos)
             return
         if self.runner.busy:
             return
+        if pos[0] >= VIEW_W:  # панель инвентаря справа
+            self.click_inventory(pos, button)
+            return
+        if button != 1:
+            return
         st = self.state
-        for item_id, r in zip(st.inventory, ui.slot_rects(st)):
-            if r.collidepoint(pos):  # выбрать / снять выбор с предмета
-                st.selected = None if st.selected == item_id else item_id
-                return
+        d = ui.arrow_at(pos, self.scene.arrows)  # стрелка: поворот, приближение, возврат
+        if d:
+            self.change_scene(self.scene.arrows[d])
+            return
         hs = self.scene.hotspot_at(pos, st)
         if hs:
             rule = hs.first_rule(st)
@@ -132,6 +152,30 @@ class Game:
         else:
             st.selected = None
 
+    def click_inventory(self, pos, button):
+        st = self.state
+        item = ui.item_at(pos, st, self.inv_scroll)
+        if not item:
+            return
+        info = self.items.get(item, {})
+        if button == 3:  # правая кнопка: осмотреть предмет
+            self.runner.start([{"say": info.get("desc", "Ничего особенного.")}])
+            return
+        if st.selected == item:  # повторный клик снимает выбор
+            st.selected = None
+        elif st.selected:  # выбран другой предмет: пробуем скрестить
+            recipe = find_recipe(self.recipes, st.selected, item)
+            if recipe and st.combine(recipe):
+                result = recipe["result"]
+                self.show_label("Получено: " + self.items.get(result, {}).get("name", result))
+                self.runner.start(recipe.get("do", []))
+            else:
+                self.show_label("Эти предметы не сочетаются")
+                st.selected = item
+        else:
+            st.selected = item
+            self.show_label(info.get("name", item))
+
     # ---------- цикл ----------
     def update(self, dt):
         if self.mode != "play":
@@ -139,6 +183,9 @@ class Game:
         self.runner.update(dt)
         if self.fade > 0:
             self.fade = max(0.0, self.fade - dt * 2.5)
+        if self.label_t > 0:
+            self.label_t -= dt
+        self.inv_scroll = max(0, min(self.inv_scroll, ui.max_scroll(self.state)))
         if self.mode == "play" and self.was_busy and not self.runner.busy:
             self.state.save()  # автосохранение после каждого действия
         self.was_busy = self.runner.busy
@@ -154,17 +201,26 @@ class Game:
     def draw_play(self):
         s = self.screen
         self.scene.draw(s, self.state, self.debug)
-        ui.draw_inventory(s, self.state, self.items)
         pos = pygame.mouse.get_pos()
-        if not self.runner.busy:
-            hs = self.scene.hotspot_at(pos, self.state)
-            pygame.mouse.set_cursor(pygame.SYSTEM_CURSOR_HAND if hs else pygame.SYSTEM_CURSOR_ARROW)
-            if hs and hs.label:
-                ui.draw_tooltip(s, hs.label, pos)
+        free = not self.runner.busy
+        arrows = self.scene.arrows if free else {}
+        hover_arrow = ui.arrow_at(pos, arrows)
+        ui.draw_arrows(s, arrows, hover_arrow)
+        ui.draw_inventory(s, self.state, self.items, self.inv_scroll)
+        cursor = pygame.SYSTEM_CURSOR_ARROW
+        if free:
+            hs = self.scene.hotspot_at(pos, self.state) if pos[0] < VIEW_W else None
+            if hover_arrow or hs or ui.item_at(pos, self.state, self.inv_scroll):
+                cursor = pygame.SYSTEM_CURSOR_HAND
+            if self.debug and hs and hs.label:
+                ui.draw_tooltip(s, hs.label, pos)  # названия зон видны только по F3
+        pygame.mouse.set_cursor(cursor)
+        if self.label_t > 0:
+            ui.draw_label(s, self.label)
         if self.runner.task:
             self.runner.task.draw(s)
         if self.fade > 0:
-            veil = pygame.Surface((WIDTH, HEIGHT))
+            veil = pygame.Surface((VIEW_W, VIEW_H))
             veil.set_alpha(int(255 * self.fade))
             s.blit(veil, (0, 0))
 
@@ -179,7 +235,7 @@ class Game:
         for key, r in self.menu_buttons.items():
             ui.draw_button(s, r, labels[key], enabled[key], r.collidepoint(pos))
         pygame.mouse.set_cursor(pygame.SYSTEM_CURSOR_ARROW)
-        hint = assets.font(18).render("Esc в игре: в меню · F3: показать зоны клика", True, (90, 90, 90))
+        hint = assets.font(18).render("Esc в игре: в меню · F3: показать зоны клика · ПКМ по предмету: осмотреть", True, (90, 90, 90))
         s.blit(hint, hint.get_rect(center=(WIDTH // 2, HEIGHT - 40)))
 
     def draw_ending(self):
