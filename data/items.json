@@ -1,3 +1,47 @@
 {
-  "key": { "name": "Ключ от кабинета", "icon": "assets/items/key.png" }
+ "key": {
+  "name": "Ключ от аудитории",
+  "desc": "Обычный ключ с биркой «143».",
+  "icon": "assets/items/key.png"
+ },
+ "shield_key": {
+  "name": "Ключ от щитка",
+  "desc": "Бирка «144». Холодный на ощупь.",
+  "icon": "assets/items/shield_key.png"
+ },
+ "brelok777": {
+  "name": "Брелок 777",
+  "desc": "Тёплый. На бирке три семёрки.",
+  "icon": "assets/items/brelok777.png"
+ },
+ "battery": {
+  "name": "Батарейка",
+  "desc": "Пальчиковая батарейка. Кажется, живая.",
+  "icon": "assets/items/battery.png"
+ },
+ "flashlight_empty": {
+  "name": "Фонарик без батарейки",
+  "desc": "Фонарик. Отсек для батарейки пуст.",
+  "icon": "assets/items/flashlight_empty.png"
+ },
+ "flashlight": {
+  "name": "Фонарик",
+  "desc": "Светит ровно и ярко.",
+  "icon": "assets/items/flashlight.png"
+ },
+ "note_a": {
+  "name": "Записка (верх)",
+  "desc": "Оторванный верх записки. Продолжение где-то рядом.",
+  "icon": "assets/items/note_a.png"
+ },
+ "note_b": {
+  "name": "Записка (низ)",
+  "desc": "Оторванный низ записки. Начала не хватает.",
+  "icon": "assets/items/note_b.png"
+ },
+ "note_full": {
+  "name": "Записка целиком",
+  "desc": "«Код ящика вахтёрши: 1447. Ключ от щитка: бирка 144».",
+  "icon": "assets/items/note_full.png"
+ }
 }
