@@ -4,6 +4,14 @@ import json
 from .settings import SAVE_PATH
 
 
+def find_recipe(recipes, a, b):
+    """Рецепт для пары предметов (порядок не важен) или None."""
+    for r in recipes:
+        if {r["a"], r["b"]} == {a, b}:
+            return r
+    return None
+
+
 class GameState:
     def __init__(self):
         self.reset()
@@ -26,6 +34,22 @@ class GameState:
             return False
         if "selected" in cond and self.selected != cond["selected"]:
             return False
+        return True
+
+    # ---------- скрещивание предметов ----------
+    def combine(self, recipe):
+        """Применяет рецепт: убирает исходные предметы (кроме keep), кладёт результат на место первого."""
+        a, b, res = recipe["a"], recipe["b"], recipe["result"]
+        if a == b or a not in self.inventory or b not in self.inventory:
+            return False
+        idx = min(self.inventory.index(a), self.inventory.index(b))
+        keep = set(recipe.get("keep", []))
+        for item in (a, b):
+            if item not in keep:
+                self.inventory.remove(item)
+        if res not in self.inventory:
+            self.inventory.insert(min(idx, len(self.inventory)), res)
+        self.selected = None
         return True
 
     # ---------- сохранение ----------
