@@ -1,5 +1,5 @@
 """Выполнение действий из JSON по очереди.
-Мгновенные: give, take, setFlag, clearFlag, randomFlag, goto, ending.
+Мгновенные: give, take, setFlag, clearFlag, randomFlag, goto, ending, label.
 Блокирующие (ждём игрока/время): say, wait."""
 import random
 from collections import deque
@@ -89,6 +89,7 @@ class ActionRunner:
         if key == "give":
             if val not in st.inventory:
                 st.inventory.append(val)
+                g.show_label("Получено: " + g.items.get(val, {}).get("name", val))
         elif key == "take":
             if val in st.inventory:
                 st.inventory.remove(val)
@@ -101,6 +102,8 @@ class ActionRunner:
             (st.flags.add if random.random() < 0.5 else st.flags.discard)(val)
         elif key == "goto":
             g.change_scene(val)
+        elif key == "label":  # короткая подпись сверху, без блокировки игры
+            g.show_label(val)
         elif key == "ending":  # конец игры: остальные действия отменяются
             self.clear()
             g.show_ending(val)
