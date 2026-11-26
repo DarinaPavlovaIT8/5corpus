@@ -6,7 +6,7 @@ import pygame
 from .. import ui
 from ..settings import VIEW_W
 from .base import PuzzleTask
-from .draw import draw_symbol, draw_msg, draw_hint
+from .draw import draw_token, draw_msg, draw_hint
 from .logic import SymbolsLogic, SYMBOLS
 
 
@@ -53,7 +53,7 @@ class SymbolsPuzzle(PuzzleTask):
             up, box, down = self._rects(cx)
             pygame.draw.rect(surf, (30, 30, 34), box)
             pygame.draw.rect(surf, (120, 112, 90), box, 4)
-            draw_symbol(surf, self.logic.current()[i], box.center, 80)
+            draw_token(surf, self.logic.current()[i], box.center, 80)
             c = up.center
             pygame.draw.polygon(surf, (190, 40, 40) if up.collidepoint(pos) else (236, 232, 214),
                                 [(c[0], c[1] - 14), (c[0] - 26, c[1] + 12), (c[0] + 26, c[1] + 12)])
