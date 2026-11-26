@@ -1,6 +1,8 @@
 """Выполнение действий из JSON по очереди.
 Мгновенные: give, take, setFlag, clearFlag, randomFlag, goto, ending, label.
-Блокирующие (ждём игрока/время): say, wait."""
+Блокирующие (ждём игрока/время): say, wait, puzzle.
+puzzle: {"puzzle": "code", ...настройки..., "onWin": [действия]} — ключ "puzzle" должен идти первым.
+При победе onWin выполняется сразу после головоломки; если её закрыли стрелкой «назад», остаток очереди сбрасывается."""
 import random
 from collections import deque
 
@@ -73,7 +75,12 @@ class ActionRunner:
             if self.task:
                 if not self.task.update(dt):
                     return
-                self.task = None
+                finished, self.task = self.task, None
+                if hasattr(finished, "on_win"):  # это была головоломка
+                    if finished.won:
+                        self.push_front(list(finished.on_win))
+                    else:
+                        self.queue.clear()  # закрыли без победы: дальше ничего не выполняем
             if not self.queue:
                 return
             self.task = self._exec(self.queue.popleft())
@@ -86,6 +93,9 @@ class ActionRunner:
             return SayTask(val)
         if key == "wait":
             return WaitTask(val / 1000)
+        if key == "puzzle":
+            from .puzzles import create  # импорт здесь, чтобы не было циклической зависимости
+            return create(val, a)
         if key == "give":
             if val not in st.inventory:
                 st.inventory.append(val)

@@ -1,14 +1,19 @@
 """Проверка data/*.json без запуска игры:  python tools/check_data.py
-Ловит опечатки: несуществующие сцены/предметы, неизвестные действия, кривые rect, битые стрелки и рецепты."""
+Ловит опечатки: несуществующие сцены/предметы, неизвестные действия, кривые rect, битые стрелки и рецепты,
+а также ошибки в настройках головоломок (code, symbols, order, wires, switches, sequence)."""
 import json
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 # Когда в движок добавляется новое действие, допиши его сюда
-KNOWN_ACTIONS = {"say", "wait", "give", "take", "setFlag", "clearFlag", "randomFlag", "goto", "ending", "label"}
+KNOWN_ACTIONS = {"say", "wait", "give", "take", "setFlag", "clearFlag", "randomFlag", "goto", "ending", "label", "puzzle"}
 COND_KEYS = {"flag", "notFlag", "has", "selected"}
 ARROW_KEYS = {"left", "right", "up", "down"}
+# Когда в game/puzzles добавляется новая головоломка, допиши её сюда (держи в синхроне с game/puzzles/__init__.py)
+PUZZLE_NAMES = {"code", "symbols", "order", "wires", "switches", "sequence"}
+SYMBOLS = {"square", "circle", "diamond", "triangle"}
+MAX_SAY = 200  # в текстбоксе помещается 3 строки, длинный текст обрежется
 
 errors, warnings = [], []
 set_flags, used_flags = set(), set()
@@ -30,13 +35,78 @@ def check_cond(cond, where, items):
             err(f"{where}: предмет '{v}' нет в items.json")
 
 
+def is_list(v, n=None):
+    return isinstance(v, list) and (n is None or len(v) == n)
+
+
+def check_puzzle(a, name, where):
+    """Проверка настроек головоломки (a — всё действие целиком)."""
+    if name not in PUZZLE_NAMES:
+        err(f"{where}: неизвестная головоломка '{name}' (есть {', '.join(sorted(PUZZLE_NAMES))})")
+        return
+    if name == "code":
+        code = a.get("code")
+        if not (isinstance(code, str) and code.isdigit()):
+            err(f"{where}: для code нужно поле code — строка из цифр, например \"3157\"")
+    elif name == "symbols":
+        ans = a.get("answer")
+        pool = a.get("symbols", sorted(SYMBOLS))
+        if not (is_list(ans) and ans):
+            err(f"{where}: для symbols нужно поле answer — список символов")
+        else:
+            for s in ans + list(a.get("start", [])):
+                if s not in pool:
+                    err(f"{where}: символа '{s}' нет в наборе барабана {pool}")
+    elif name == "order":
+        start, ans = a.get("start"), a.get("answer")
+        if not (is_list(start) and is_list(ans)) or len(start) != len(ans):
+            err(f"{where}: для order нужны списки start и answer одинаковой длины")
+        elif sorted(map(str, start)) != sorted(map(str, ans)):
+            err(f"{where}: start и answer должны состоять из одних и тех же предметов")
+        elif start == ans:
+            err(f"{where}: start совпадает с answer — головоломка решена с самого начала")
+        if a.get("style", "tiles") not in ("books", "keys", "tiles"):
+            err(f"{where}: style должен быть books, keys или tiles")
+    elif name == "wires":
+        left, right, pairs = a.get("left"), a.get("right"), a.get("pairs")
+        if not (is_list(left) and is_list(right) and is_list(pairs)) or len(left) != len(right):
+            err(f"{where}: для wires нужны списки left, right одинаковой длины и pairs")
+        else:
+            n = len(left)
+            ok = all(is_list(p, 2) and all(isinstance(x, int) and 0 <= x < n for x in p) for p in pairs)
+            if not ok or len(pairs) != n or len({p[0] for p in pairs}) != n or len({p[1] for p in pairs}) != n:
+                err(f"{where}: pairs должны быть [[левая, правая], ...] — по одной паре на каждую клемму, номера с нуля")
+    elif name == "switches":
+        target, count = a.get("target"), a.get("count")
+        n = count or (len(target) if is_list(target) else 0)
+        if not n:
+            err(f"{where}: для switches нужно count или target")
+        if target is not None and (not is_list(target) or len(target) != n or any(t not in (0, 1) for t in target)):
+            err(f"{where}: target — список из {n} чисел 0/1")
+        if a.get("labels") is not None and len(a["labels"]) != n:
+            err(f"{where}: labels должно быть {n} штук")
+    elif name == "sequence":
+        buttons, order = a.get("buttons"), a.get("order")
+        if not (is_list(buttons) and is_list(order) and order):
+            err(f"{where}: для sequence нужны списки buttons и order")
+        elif any(not isinstance(o, int) or not 0 <= o < len(buttons) for o in order):
+            err(f"{where}: order содержит номер кнопки, которой нет (номера с нуля)")
+
+
 def check_actions(actions, where, scenes, items):
     for i, a in enumerate(actions):
+        key, val = next(iter(a.items()))
+        if key == "puzzle":
+            check_puzzle(a, val, f"{where}[{i}]")
+            check_actions(a.get("onWin", []), f"{where}[{i}].onWin", scenes, items)
+            continue
         if len(a) != 1:
             err(f"{where}[{i}]: в одном действии должен быть один ключ, а тут {list(a)}")
-        key, val = next(iter(a.items()))
         if key not in KNOWN_ACTIONS:
             err(f"{where}[{i}]: неизвестное действие '{key}'")
+        elif key == "say":
+            if len(val) > MAX_SAY:
+                warnings.append(f"{where}[{i}]: реплика на {len(val)} символов, в рамку влезет около {MAX_SAY}: «{val[:40]}…»")
         elif key == "ending" and val not in endings:
             err(f"{where}[{i}]: концовки '{val}' нет в блоке endings")
         elif key == "goto":
@@ -68,7 +138,7 @@ def main():
         current[0] = sid
         bg = sc.get("bg")
         if bg and not (ROOT / bg).exists():
-            warnings.append(f"{sid}: нет файла фона {bg} (будет цветная заглушка)")
+            warnings.append(f"{sid}: нет файла фона {bg} (будет цветная заглушка; tools/make_placeholders.py создаст png)")
         for d, target in sc.get("arrows", {}).items():
             if d not in ARROW_KEYS:
                 err(f"{sid}.arrows: неизвестное направление '{d}' (есть left, right, up, down)")
@@ -97,11 +167,16 @@ def main():
     for iid, it in items.items():
         if it.get("icon") and not (ROOT / it["icon"]).exists():
             warnings.append(f"предмет '{iid}': нет файла иконки {it['icon']} (будет буква)")
+        if len(it.get("desc", "")) > MAX_SAY:
+            warnings.append(f"предмет '{iid}': описание длиннее {MAX_SAY} символов, в рамку не влезет")
     for j, r in enumerate(recipes):
         w = f"recipes[{j}]"
         for k in ("a", "b", "result"):
             if r.get(k) not in items:
                 err(f"{w}.{k}: предмета '{r.get(k)}' нет в items.json")
+        for k in r.get("keep", []):
+            if k not in (r.get("a"), r.get("b")):
+                err(f"{w}.keep: '{k}' должен быть одним из a или b")
         if r.get("a") == r.get("b"):
             err(f"{w}: a и b совпадают")
         check_actions(r.get("do", []), w + ".do", scenes, items)
