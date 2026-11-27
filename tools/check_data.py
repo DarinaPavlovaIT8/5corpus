@@ -7,7 +7,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 # Когда в движок добавляется новое действие, допиши его сюда
-KNOWN_ACTIONS = {"say", "wait", "give", "take", "setFlag", "clearFlag", "randomFlag", "goto", "ending", "label", "puzzle"}
+KNOWN_ACTIONS = {"say", "wait", "give", "take", "setFlag", "clearFlag", "randomFlag", "goto", "ending", "label", "puzzle", "flash"}
 COND_KEYS = {"flag", "notFlag", "has", "selected"}
 ARROW_KEYS = {"left", "right", "up", "down"}
 # Когда в game/puzzles добавляется новая головоломка, допиши её сюда (держи в синхроне с game/puzzles/__init__.py)
@@ -107,6 +107,12 @@ def check_actions(actions, where, scenes, items):
         elif key == "say":
             if len(val) > MAX_SAY:
                 warnings.append(f"{where}[{i}]: реплика на {len(val)} символов, в рамку влезет около {MAX_SAY}: «{val[:40]}…»")
+        elif key == "flash":
+            img = str(val).split(":")[0]
+            if ":" not in str(val):
+                err(f"{where}[{i}]: flash должен быть вида \"картинка:метка\", например ghost_flash:cor2")
+            elif not (ROOT / "assets" / "bg" / f"{img}.png").exists():
+                warnings.append(f"{where}[{i}]: нет файла assets/bg/{img}.png (будет короткое затемнение без силуэта)")
         elif key == "ending" and val not in endings:
             err(f"{where}[{i}]: концовки '{val}' нет в блоке endings")
         elif key == "goto":
@@ -160,6 +166,16 @@ def main():
             if h.get("img") and not (ROOT / h["img"]).exists():
                 warnings.append(f"{w}: нет файла спрайта {h['img']}")
             check_cond(h.get("visibleIf"), w + ".visibleIf", items)
+            for prev in sc["hotspots"][:sc["hotspots"].index(h)]:
+                a, b = prev.get("rect"), h.get("rect")
+                va, vb = prev.get("visibleIf") or {}, h.get("visibleIf") or {}
+                if (va.get("flag") and va.get("flag") == vb.get("notFlag")) or \
+                        (vb.get("flag") and vb.get("flag") == va.get("notFlag")):
+                    continue  # зоны никогда не видны одновременно
+                if is_list(a, 4) and is_list(b, 4) and a[0] < b[0] + b[2] and b[0] < a[0] + a[2] \
+                        and a[1] < b[1] + b[3] and b[1] < a[1] + a[3]:
+                    warnings.append(f"{sid}: зоны '{prev.get('label')}' и '{h.get('label')}' перекрываются, "
+                                    f"клик может уйти не туда (верх: та, что ниже в списке)")
             for j, rule in enumerate(h.get("rules", [])):
                 check_cond(rule.get("if"), f"{w}.rules[{j}]", items)
                 check_actions(rule.get("do", []), f"{w}.rules[{j}].do", scenes, items)
@@ -169,6 +185,12 @@ def main():
             warnings.append(f"предмет '{iid}': нет файла иконки {it['icon']} (будет буква)")
         if len(it.get("desc", "")) > MAX_SAY:
             warnings.append(f"предмет '{iid}': описание длиннее {MAX_SAY} символов, в рамку не влезет")
+    for iid, it in items.items():
+        drop = it.get("dropWhen")
+        if drop is not None and not (is_list(drop) and drop):
+            err(f"предмет '{iid}': dropWhen — непустой список флагов")
+        for f in drop or []:
+            used_flags.add(f)
     for j, r in enumerate(recipes):
         w = f"recipes[{j}]"
         for k in ("a", "b", "result"):

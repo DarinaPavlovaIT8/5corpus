@@ -59,6 +59,18 @@ class GameState:
         self.selected = None
         return True
 
+    def prune_inventory(self, items):
+        """Убирает из инвентаря предметы, которые уже отработали. В items.json у предмета может быть
+        "dropWhen": ["флаг", ...]: когда выставлены ВСЕ эти флаги, предмет больше не нужен по сюжету.
+        Предметы без dropWhen остаются навсегда. Возвращает список id убранных предметов."""
+        gone = [i for i in self.inventory
+                if items.get(i, {}).get("dropWhen") and all(f in self.flags for f in items[i]["dropWhen"])]
+        for i in gone:
+            self.inventory.remove(i)
+        if self.selected in gone:
+            self.selected = None
+        return gone
+
     # ---------- сохранение ----------
     def save(self, path=SAVE_PATH):
         """Пишем через временный файл, чтобы при сбое не испортить старое сохранение."""

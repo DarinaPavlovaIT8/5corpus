@@ -6,8 +6,9 @@ import pygame
 
 from . import assets, ui
 from .actions import ActionRunner
+from .flash import FLASH_TIME, alpha as flash_alpha
 from .scene import Scene
-from .settings import (WIDTH, HEIGHT, VIEW_W, VIEW_H, FPS, TITLE, SCENES_PATH, ITEMS_PATH,
+from .settings import (ROOT, WIDTH, HEIGHT, VIEW_W, VIEW_H, FPS, TITLE, SCENES_PATH, ITEMS_PATH,
                        RECIPES_PATH, COLOR_TEXT, COLOR_ACCENT)
 from .state import GameState, find_recipe
 
@@ -33,6 +34,7 @@ class Game:
         self.was_busy = False
         self.inv_scroll = 0
         self.label, self.label_t = "", 0.0
+        self.flash = None  # [картинка, время] идущего мерцания
         cx = WIDTH // 2 - 150
         self.menu_buttons = {
             "new": pygame.Rect(cx, 330, 300, 56),
@@ -44,6 +46,18 @@ class Game:
     def show_label(self, text, seconds=2.2):
         self.label, self.label_t = text, seconds
 
+    # ---------- мерцание силуэта ----------
+    def start_flash(self, name):
+        """Запускает одноразовое мерцание: assets/bg/<name>.png (с прозрачностью) поверх сцены.
+        Нет файла: просто короткое затемнение. Повторов не допускает actions (метка во флагах)."""
+        try:
+            img = pygame.image.load(str(ROOT / "assets" / "bg" / f"{name}.png")).convert_alpha()
+            img = pygame.transform.smoothscale(img, (VIEW_W, VIEW_H))
+        except (OSError, pygame.error):
+            img = pygame.Surface((VIEW_W, VIEW_H), pygame.SRCALPHA)
+            img.fill((0, 0, 0, 255))
+        self.flash = [img, 0.0]
+
     # ---------- сохранение ----------
     def can_continue(self):
         """Есть ли рабочее сохранение (битое или со старой сценой считается отсутствующим)."""
@@ -53,7 +67,7 @@ class Game:
     def new_game(self):
         self.state.reset()
         self.runner.clear()
-        self.inv_scroll, self.label_t = 0, 0.0
+        self.inv_scroll, self.label_t, self.flash = 0, 0.0, None
         self.mode = "play"
         self.change_scene(self.data["start"])
 
@@ -61,7 +75,7 @@ class Game:
         if not self.state.load(valid_scenes=self.scenes):
             return
         self.runner.clear()
-        self.inv_scroll, self.label_t = 0, 0.0
+        self.inv_scroll, self.label_t, self.flash = 0, 0.0, None
         self.mode = "play"
         self.change_scene(self.state.scene, run_enter=False)
 
@@ -69,6 +83,7 @@ class Game:
         if self.mode == "play":
             self.state.save()
         self.runner.clear()
+        self.flash = None
         self.mode = "menu"
 
     def change_scene(self, sid, run_enter=True):
@@ -181,6 +196,16 @@ class Game:
         if self.mode != "play":
             return
         self.runner.update(dt)
+        if self.flash:
+            self.flash[1] += dt
+            if self.flash[1] >= FLASH_TIME:
+                self.flash = None
+        if not self.runner.busy:  # отработавшие предметы (dropWhen в items.json) убираем из инвентаря
+            removed = self.state.prune_inventory(self.items)
+            if removed:
+                names = ", ".join(self.items.get(i, {}).get("name", i) for i in removed)
+                self.show_label("Использовано: " + names)
+                self.state.save()
         if self.fade > 0:
             self.fade = max(0.0, self.fade - dt * 2.5)
         if self.label_t > 0:
@@ -201,6 +226,12 @@ class Game:
     def draw_play(self):
         s = self.screen
         self.scene.draw(s, self.state, self.debug)
+        if self.flash:  # мерцание силуэта поверх сцены, но под стрелками и инвентарём
+            img, t = self.flash
+            a = flash_alpha(t)
+            if a:
+                img.set_alpha(a)
+                s.blit(img, (0, 0))
         pos = pygame.mouse.get_pos()
         free = not self.runner.busy
         arrows = self.scene.arrows if free else {}

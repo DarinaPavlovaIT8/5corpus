@@ -99,12 +99,18 @@ def draw_inventory(surf, state, items, scroll=0):
         selected = state.selected == item_id
         pygame.draw.rect(surf, (222, 214, 186), r)
         info = items.get(item_id, {})
-        icon = assets.image(info["icon"], (SLOT - 16, SLOT - 16)) if info.get("icon") else None
+        try:
+            icon = assets.image(info["icon"], (SLOT - 16, SLOT - 16)) if info.get("icon") else None
+        except (OSError, pygame.error):
+            icon = None  # файл иконки битый или не читается
         if icon:
             surf.blit(icon, (r.x + 8, r.y + 8))
-        else:  # заглушка: первая буква названия
-            letter = assets.font(36).render(info.get("name", "?")[:1], True, (40, 40, 40))
-            surf.blit(letter, letter.get_rect(center=r.center))
+        else:  # заглушка, пока нет картинки: название предмета мелким шрифтом по центру ячейки
+            f = assets.font(15)
+            lines = wrap(info.get("name", "?"), f, SLOT - 12)[:3]
+            for k, line in enumerate(lines):
+                txt = f.render(line, True, (40, 40, 40))
+                surf.blit(txt, txt.get_rect(center=(r.centerx, r.centery + int((k - (len(lines) - 1) / 2) * 18))))
         pygame.draw.rect(surf, COLOR_ACCENT if selected else (30, 30, 30), r, 5 if selected else 3)
     cx = VIEW_W + PANEL_W // 2
     if scroll > 0:  # есть предметы выше

@@ -76,7 +76,7 @@
       40.5,
       42,
       23,
-      36
+      29
      ],
      "rules": [
       {
@@ -358,9 +358,9 @@
      "label": "Стол преподавателя",
      "rect": [
       53.5,
-      52,
+      53,
       43,
-      45
+      44
      ],
      "rules": [
       {
@@ -1226,7 +1226,7 @@
      "rect": [
       14,
       60,
-      26,
+      21,
       10
      ],
      "rules": [
@@ -1236,82 +1236,6 @@
          "say": "Табличка: «Щит аварийного освещения. Предохранитель: 1 шт.»"
         }
        ]
-      }
-     ]
-    }
-   ]
-  },
-  "ghost_1": {
-   "title": "…",
-   "bg": "assets/bg/ghost_flash.png",
-   "color": "#202020",
-   "arrows": {},
-   "hotspots": [],
-   "onEnter": [
-    {
-     "do": [
-      {
-       "wait": 260
-      },
-      {
-       "goto": "cor_2"
-      }
-     ]
-    }
-   ]
-  },
-  "ghost_2": {
-   "title": "…",
-   "bg": "assets/bg/ghost_flash.png",
-   "color": "#202020",
-   "arrows": {},
-   "hotspots": [],
-   "onEnter": [
-    {
-     "do": [
-      {
-       "wait": 260
-      },
-      {
-       "goto": "cor_stand"
-      }
-     ]
-    }
-   ]
-  },
-  "ghost_end": {
-   "title": "…",
-   "bg": "assets/bg/ghost_hall.png",
-   "color": "#202020",
-   "arrows": {},
-   "hotspots": [],
-   "onEnter": [
-    {
-     "do": [
-      {
-       "wait": 260
-      },
-      {
-       "goto": "cor_2"
-      }
-     ]
-    }
-   ]
-  },
-  "ghost_window": {
-   "title": "…",
-   "bg": "assets/bg/ghost_hall.png",
-   "color": "#202020",
-   "arrows": {},
-   "hotspots": [],
-   "onEnter": [
-    {
-     "do": [
-      {
-       "wait": 260
-      },
-      {
-       "goto": "lobby"
       }
      ]
     }
@@ -1541,20 +1465,17 @@
     {
      "do": [
       {
-       "setFlag": "ghost1"
-      },
-      {
-       "goto": "ghost_1"
+       "flash": "ghost_flash:cor2"
       }
-     ],
-     "if": {
-      "notFlag": "ghost1"
-     }
+     ]
     },
     {
      "do": [
       {
        "setFlag": "sawEndGhost"
+      },
+      {
+       "flash": "ghost_far:end"
       },
       {
        "say": "В конце коридора на миг мелькнул тёмный силуэт и пропал."
@@ -1727,20 +1648,11 @@
       {
        "do": [
         {
-         "give": "fuse2"
-        },
-        {
-         "clearFlag": "cf6Free"
-        },
-        {
-         "clearFlag": "cf6"
-        },
-        {
-         "say": "Предохранитель на 6 А можно забрать."
+         "say": "Лампы горят. Предохранитель на 6 А лучше не трогать."
         }
        ],
        "if": {
-        "flag": "cf6Free"
+        "flag": "corridorLight"
        }
       },
       {
@@ -1869,13 +1781,10 @@
            "setFlag": "cf10Free"
           },
           {
-           "setFlag": "cf6Free"
-          },
-          {
            "say": "Лампы под потолком загудели и по очереди вспыхнули, одна за другой."
           },
           {
-           "goto": "ghost_end"
+           "goto": "cor_2"
           }
          ]
         }
@@ -1926,7 +1835,7 @@
       10,
       12,
       50,
-      48
+      8
      ],
      "rules": [
       {
@@ -1937,6 +1846,81 @@
        ]
       }
      ]
+    },
+    {
+     "label": "Стенд",
+     "rect": [
+      10,
+      44,
+      50,
+      16
+     ],
+     "rules": [
+      {
+       "do": [
+        {
+         "say": "Стенд с выцветшими приказами. Один угол отогнут, будто там было что-то приколото."
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "label": "Стенд",
+     "rect": [
+      10,
+      20,
+      8,
+      24
+     ],
+     "rules": [
+      {
+       "do": [
+        {
+         "say": "Стенд с выцветшими приказами. Один угол отогнут, будто там было что-то приколото."
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "label": "Стенд",
+     "rect": [
+      34,
+      20,
+      26,
+      24
+     ],
+     "rules": [
+      {
+       "do": [
+        {
+         "say": "Стенд с выцветшими приказами. Один угол отогнут, будто там было что-то приколото."
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "label": "Пустое место на стенде",
+     "rect": [
+      18,
+      20,
+      16,
+      24
+     ],
+     "rules": [
+      {
+       "do": [
+        {
+         "say": "Здесь висело старое фото. На выцветшей бумаге остался светлый прямоугольник."
+        }
+       ]
+      }
+     ],
+     "visibleIf": {
+      "flag": "got_theatre_photo"
+     }
     },
     {
      "label": "Коробка у стенда",
@@ -1989,15 +1973,9 @@
     {
      "do": [
       {
-       "setFlag": "ghost2"
-      },
-      {
-       "goto": "ghost_2"
+       "flash": "ghost_flash:stand"
       }
-     ],
-     "if": {
-      "notFlag": "ghost2"
-     }
+     ]
     }
    ]
   },
@@ -2386,21 +2364,10 @@
     {
      "do": [
       {
-       "setFlag": "reflectSeen"
+       "setFlag": "reflectText"
       },
       {
-       "goto": "ghost_window"
-      }
-     ],
-     "if": {
-      "flag": "buildingLight",
-      "notFlag": "reflectSeen"
-     }
-    },
-    {
-     "do": [
-      {
-       "setFlag": "reflectText"
+       "flash": "ghost_window:lobby"
       },
       {
        "say": "Свет залил холл. В стекле вахты на секунду отразился человек, он стоял прямо за твоей спиной."
@@ -2410,7 +2377,7 @@
       }
      ],
      "if": {
-      "flag": "reflectSeen",
+      "flag": "buildingLight",
       "notFlag": "reflectText"
      }
     }
@@ -2759,10 +2726,10 @@
     {
      "label": "Последнее фото",
      "rect": [
-      48,
       44,
-      12,
-      10
+      41,
+      10,
+      8
      ],
      "rules": [
       {

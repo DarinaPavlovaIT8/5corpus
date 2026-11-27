@@ -1,5 +1,5 @@
 """Выполнение действий из JSON по очереди.
-Мгновенные: give, take, setFlag, clearFlag, randomFlag, goto, ending, label.
+Мгновенные: give, take, setFlag, clearFlag, randomFlag, goto, ending, label, flash.
 Блокирующие (ждём игрока/время): say, wait, puzzle.
 puzzle: {"puzzle": "code", ...настройки..., "onWin": [действия]} — ключ "puzzle" должен идти первым.
 При победе onWin выполняется сразу после головоломки; если её закрыли стрелкой «назад», остаток очереди сбрасывается."""
@@ -112,6 +112,11 @@ class ActionRunner:
             (st.flags.add if random.random() < 0.5 else st.flags.discard)(val)
         elif key == "goto":
             g.change_scene(val)
+        elif key == "flash":  # "картинка:метка": одноразовое мерцание силуэта поверх сцены (не блокирует игру)
+            flag = "flash:" + val  # метка во флагах: эффект срабатывает ровно один раз за прохождение
+            if flag not in st.flags:
+                st.flags.add(flag)
+                g.start_flash(val.split(":")[0])
         elif key == "label":  # короткая подпись сверху, без блокировки игры
             g.show_label(val)
         elif key == "ending":  # конец игры: остальные действия отменяются
